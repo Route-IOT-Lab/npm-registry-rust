@@ -1,0 +1,30 @@
+services:
+  registry:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: npm-registry-rust:local
+    container_name: npm-registry
+    restart: unless-stopped
+    # `.env` is the source of truth for secrets; the two paths below must stay
+    # container-local, so they are overridden after the file is loaded.
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4873"
+      STORAGE_DIR: /app/storage
+      DATABASE_URL: sqlite:///app/data/registry.db?mode=rwc
+    ports:
+      # Bind to loopback only: put a reverse proxy in front for TLS.
+      - "127.0.0.1:4873:4873"
+    volumes:
+      - ./storage:/app/storage
+      - ./data:/app/data
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4873/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s

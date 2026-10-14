@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: fmt · clippy · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --all-targets
+
+      - name: Build release
+        run: cargo build --release --locked
+
+  smoke:
+    name: end-to-end smoke test
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Start registry
+        run: |
+          cat > .env <<'EOF'
+          HOST=127.0.0.1
+          PORT=4873
+          REGISTRY_BASE_URL=http://127.0.0.1:4873
+          STORAGE_DIR=./storage
+          DATABASE_URL=sqlite://./data/registry.db?mode=rwc
+          JWT_SECRET=ci-secret-ci-secret-ci-secret-ci-secret
+          ADMIN_USERNAME=admin
+          ADMIN_PASSWORD=ci-admin-password
+          ALLOW_REGISTRATION=true
+          RUST_LOG=info
+          EOF
+          ./target/release/npm-registry-rust &
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:4873/api/health && break
+            sleep 1
+          done
+
+      - name: Login, publish, install
+        run: |
+          set -e
+          TOKEN=$(curl -fsS -X PUT http://127.0.0.1:4873/-/user/org.couchdb.user:admin \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"admin","password":"ci-admin-password"}' \
+            | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).token')
+
+          mkdir -p /tmp/ci-pkg && cd /tmp/ci-pkg
+          cat > package.json <<'EOF'
+          { "name": "ci-smoke-pkg", "version": "1.0.0", "main": "index.js", "license": "MIT" }
+          EOF
+          echo 'module.exports = () => "ok";' > index.js
+          cat > .npmrc <<EOF
+          registry=http://127.0.0.1:4873/
+          //127.0.0.1:4873/:_authToken=$TOKEN
+          EOF
+
+          npm publish
+          npm dist-tag add ci-smoke-pkg@1.0.0 beta
+          npm dist-tag ls ci-smoke-pkg
+
+          mkdir -p /tmp/ci-consumer && cd /tmp/ci-consumer
+          echo '{ "name": "c", "version": "1.0.0", "private": true }' > package.json
+          echo 'registry=http://127.0.0.1:4873/' > .npmrc
+          npm install ci-smoke-pkg
+          node -e 'require("ci-smoke-pkg")()'

@@ -1,0 +1,40 @@
+# --- Rust ---
+/target
+**/*.rs.bk
+*.pdb
+
+# --- runtime data (never commit) ---
+/data
+/storage
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# --- secrets ---
+.env
+.env.*
+!.env.example
+
+# --- instance deployment config ---
+# Domains, server addresses and SSH key paths are instance data and must never
+# enter this repository. Keep the deployment kit outside the tree entirely;
+# this entry is only a backstop for someone who drops one in by accident.
+#
+# Note that gitignore does NOT untrack files that are already committed — the
+# history has to be rewritten for those. Before making this repository public:
+#   git grep -nE '<domain>|<ip>' $(git rev-list --all)
+deploy/
+*.pem
+*.key
+
+# --- editors / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+
+# --- node (for smoke tests) ---
+node_modules/

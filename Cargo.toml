@@ -1,0 +1,75 @@
+[package]
+name = "npm-registry-rust"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "A lightweight, self-hosted private npm registry written in Rust"
+license = "MIT"
+authors = ["npm-registry-rust contributors"]
+repository = "https://github.com/your-org/npm-registry-rust"
+keywords = ["npm", "registry", "private", "registry-server", "rust"]
+categories = ["web-programming::http-server", "development-tools"]
+
+[[bin]]
+name = "npm-registry-rust"
+path = "src/main.rs"
+
+[dependencies]
+# --- web framework ---
+axum = { version = "0.8", features = ["macros", "http2"] }
+axum-extra = { version = "0.10", features = ["cookie"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors", "limit", "request-id"] }
+
+# --- async runtime ---
+tokio = { version = "1", features = ["full"] }
+
+# --- serialization ---
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# --- database ---
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "chrono", "macros", "migrate"] }
+
+# --- upstream proxying ---
+# rustls is used instead of native-tls so cross-compiling to linux-gnu with
+# `zig cc` needs no OpenSSL sysroot.
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls-webpki-roots",
+    "json",
+    "stream",
+    "gzip",
+] }
+tokio-util = { version = "0.7", features = ["io"] }
+futures-util = "0.3"
+
+# --- auth / crypto ---
+jsonwebtoken = "9"
+argon2 = "0.5"
+rand = "0.8"
+base64 = "0.22"
+sha1 = "0.10"
+sha2 = "0.10"
+hex = "0.4"
+
+# --- misc ---
+semver = "1"
+percent-encoding = "2"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+thiserror = "2"
+anyhow = "1"
+dotenvy = "0.15"
+mime_guess = "2"
+
+# --- observability ---
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
